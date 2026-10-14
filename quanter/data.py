@@ -1,5 +1,28 @@
+from typing import Optional
+
 import numpy as np
 import pandas as pd
+
+
+def drop_incomplete_bar(
+    close: pd.Series,
+    now: Optional[pd.Timestamp] = None,
+    close_hour: int = 16,
+    close_minute: int = 30,
+) -> pd.Series:
+    """Drop today's bar if the US market has not closed yet.
+
+    During market hours Yahoo returns a partial bar for today. Treating it as a
+    final close would put a wrong number into the results, and into the
+    append-only paper log, permanently.
+    """
+    if close.empty:
+        return close
+    now = now if now is not None else pd.Timestamp.now(tz="America/New_York")
+    cutoff = now.normalize().replace(hour=close_hour, minute=close_minute)
+    if close.index[-1].date() == now.date() and now < cutoff:
+        return close.iloc[:-1]
+    return close
 
 
 def fetch_prices(ticker: str, start: str) -> pd.Series:
@@ -15,7 +38,7 @@ def fetch_prices(ticker: str, start: str) -> pd.Series:
     close = close.dropna().astype(float)
     close.index = pd.to_datetime(close.index).tz_localize(None).normalize()
     close.name = ticker
-    return close
+    return drop_incomplete_bar(close)
 
 
 def synthetic_prices(start: str = "2010-01-01", end: str = "2026-10-20", seed: int = 7) -> pd.Series:

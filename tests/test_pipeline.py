@@ -6,7 +6,7 @@ import pandas as pd
 
 from quanter import metrics as m
 from quanter.config import Config
-from quanter.data import synthetic_prices
+from quanter.data import drop_incomplete_bar, synthetic_prices
 from quanter.decay import decay_check
 from quanter.pipeline import build_results, label_segments, update_paper_log
 from quanter.strategy import run_strategy
@@ -81,6 +81,17 @@ def test_results_schema_and_synthetic_flag():
     for key in ("segment", "cum_return", "drawdown", "rolling_sharpe"):
         assert len(res["series"][key]) == n
     json.dumps(res)  # must be serializable, no NaN objects
+
+
+def test_incomplete_bar_is_dropped_before_the_close():
+    idx = pd.to_datetime(["2026-10-13", "2026-10-14"])
+    s = pd.Series([100.0, 101.0], index=idx)
+    during = pd.Timestamp("2026-10-14 13:00", tz="America/New_York")
+    after = pd.Timestamp("2026-10-14 17:00", tz="America/New_York")
+    next_morning = pd.Timestamp("2026-10-15 09:00", tz="America/New_York")
+    assert len(drop_incomplete_bar(s, during)) == 1
+    assert len(drop_incomplete_bar(s, after)) == 2
+    assert len(drop_incomplete_bar(s, next_morning)) == 2  # yesterday's bar is complete
 
 
 def _crash_prices():
