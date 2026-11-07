@@ -1,5 +1,7 @@
 # Quanter pipeline
 
+[![CI](https://github.com/rxj0102/quanter-pipeline/actions/workflows/daily.yml/badge.svg)](https://github.com/rxj0102/quanter-pipeline/actions/workflows/daily.yml)
+
 A daily job that runs one strategy, applies stated costs, labels every day as in-sample, out-of-sample or paper trading, and writes a results file for the Quanter site. Research and paper trading only.
 
 ## Run it
