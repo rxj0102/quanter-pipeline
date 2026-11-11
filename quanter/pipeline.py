@@ -9,7 +9,7 @@ import pandas as pd
 
 from . import metrics as m
 from .config import Config
-from .data import fetch_prices, synthetic_prices
+from .data import daily_rf, fetch_prices, fetch_tbill_rate, synthetic_prices
 from .decay import decay_check
 from .strategy import run_strategy
 
@@ -38,21 +38,25 @@ def _r(x, nd=6):
     return None if x is None else round(x, nd)
 
 
-def segment_stats(returns: pd.Series, cfg: Config) -> dict:
+def segment_stats(returns: pd.Series, cfg: Config, rf_daily: pd.Series | None = None) -> dict:
     n = int(len(returns))
     if n < 2:
-        return {"days": n, "ann_return": None, "ann_vol": None, "sharpe": None, "max_drawdown": None}
+        return {"days": n, "ann_return": None, "ann_vol": None, "sharpe": None,
+                "sharpe_excess": None, "max_drawdown": None}
     return {
         "days": n,
         "ann_return": _r(m.ann_return(returns, cfg.trading_days)),
         "ann_vol": _r(m.ann_vol(returns, cfg.trading_days)),
         "sharpe": _r(m.sharpe(returns, cfg.trading_days, cfg.risk_free_rate)),
+        "sharpe_excess": _r(m.sharpe_excess(returns, rf_daily, cfg.trading_days)) if rf_daily is not None else None,
         "max_drawdown": _r(m.max_drawdown(returns)),
     }
 
 
-def build_results(prices: pd.Series, cfg: Config, synthetic: bool = False) -> dict:
+def build_results(prices: pd.Series, cfg: Config, synthetic: bool = False,
+                  rf_rate: pd.Series | None = None) -> dict:
     df = run_strategy(prices, cfg)
+    rf_daily = daily_rf(rf_rate, df.index, cfg.trading_days) if rf_rate is not None else None
     net = df["net"]
     seg = label_segments(df.index, cfg)
 
@@ -65,7 +69,7 @@ def build_results(prices: pd.Series, cfg: Config, synthetic: bool = False) -> di
     segments = {}
     for name in SEGMENTS:
         part = net[seg == name]
-        stats = segment_stats(part, cfg)
+        stats = segment_stats(part, cfg, rf_daily)
         stats["start"] = part.index[0].strftime("%Y-%m-%d") if len(part) else None
         stats["end"] = part.index[-1].strftime("%Y-%m-%d") if len(part) else None
         segments[name] = stats
@@ -87,7 +91,8 @@ def build_results(prices: pd.Series, cfg: Config, synthetic: bool = False) -> di
             "synthetic": synthetic,
             "strategy": "baseline_trend_voltarget",
             "ticker": cfg.ticker,
-            "notes": "Net of costs. Sharpe on raw returns, risk-free rate set in assumptions.",
+            "notes": "Net of costs. sharpe is on raw returns; sharpe_excess is in excess of the 3-month T-bill (FRED), null if unavailable.",
+            "rf_source": f"FRED {cfg.rf_series}" if rf_rate is not None else None,
             "assumptions": asdict(cfg),
         },
         "summary": {
@@ -162,7 +167,10 @@ def main(argv=None):
     log_path = args.log or cfg.log_path
 
     prices = synthetic_prices() if args.synthetic else fetch_prices(cfg.ticker, cfg.data_start)
-    res = build_results(prices, cfg, synthetic=args.synthetic)
+    rf_rate = None if args.synthetic else fetch_tbill_rate(cfg.rf_series)
+    if rf_rate is None and not args.synthetic:
+        print("WARNING: FRED T-bill rate unavailable; sharpe_excess will be null")
+    res = build_results(prices, cfg, synthetic=args.synthetic, rf_rate=rf_rate)
     df, seg = res.pop("_frame"), res.pop("_segments_series")
 
     os.makedirs(os.path.dirname(out_path) or ".", exist_ok=True)

@@ -34,7 +34,8 @@ class Config:
 
     # Frictions and conventions
     cost_bps: float = 2.0  # per unit of turnover, one way
-    risk_free_rate: float = 0.0  # Sharpe ratios are computed on raw returns
+    risk_free_rate: float = 0.0  # used by the raw "sharpe" fields, kept at 0
+    rf_series: str = "DGS3MO"  # FRED series for the excess-of-cash Sharpe (sharpe_excess)
     trading_days: int = 252
 
     # Risk metrics

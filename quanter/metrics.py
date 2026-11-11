@@ -57,3 +57,19 @@ def ann_vol(returns: pd.Series, trading_days: int = 252) -> float:
     if len(returns) < 2:
         return float("nan")
     return float(returns.std() * np.sqrt(trading_days))
+
+
+def sharpe_excess(returns: pd.Series, rf_daily: pd.Series, trading_days: int = 252) -> float:
+    """Sharpe ratio of returns in excess of a daily cash return series."""
+    # A flat strategy has no risk to reward; do not divide by the tiny
+    # variation of the cash rate itself.
+    if len(returns) < 2 or returns.std() == 0 or np.isnan(returns.std()):
+        return float("nan")
+    rf = rf_daily.reindex(returns.index)
+    ex = (returns - rf).dropna()
+    if len(ex) < 2:
+        return float("nan")
+    sd = ex.std()
+    if sd == 0 or np.isnan(sd):
+        return float("nan")
+    return float(ex.mean() / sd * np.sqrt(trading_days))
