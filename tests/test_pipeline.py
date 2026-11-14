@@ -200,3 +200,47 @@ def test_paper_log_is_append_only(tmp_path):
     mismatched = update_paper_log(tampered, seg, log)
     assert len(mismatched) == 1
     assert pd.read_csv(log).equals(first)
+
+
+# ---- excess-of-cash Sharpe -----------------------------------------------------
+
+from quanter.data import daily_rf, parse_fred_csv
+
+
+def test_parse_fred_csv_handles_missing_dots():
+    s = parse_fred_csv("observation_date,DGS3MO\n2024-01-02,5.40\n2024-01-03,.\n2024-01-04,5.38\n")
+    assert list(s.values) == [5.40, 5.38]
+
+
+def test_daily_rf_uses_prior_close_rate():
+    idx = pd.bdate_range("2024-01-01", periods=5)
+    rate = pd.Series([0.05, 0.05, 0.10, 0.10, 0.10], index=idx)
+    rf = daily_rf(rate, idx)
+    assert np.isnan(rf.iloc[0])
+    assert np.isclose(rf.iloc[2], 1.05 ** (1 / 252) - 1)  # day 2 uses day 1's rate
+    assert np.isclose(rf.iloc[3], 1.10 ** (1 / 252) - 1)
+
+
+def test_sharpe_excess_matches_flat_rate():
+    rng = np.random.default_rng(0)
+    idx = pd.bdate_range("2020-01-01", periods=500)
+    r = pd.Series(rng.normal(0.0005, 0.01, 500), index=idx)
+    flat = pd.Series(0.0002, index=idx)
+    assert np.isclose(m.sharpe_excess(r, flat), m.sharpe(r - 0.0002))
+
+
+def test_results_include_excess_sharpe_when_rate_given():
+    prices = synthetic_prices()
+    rate = pd.Series(0.03, index=prices.index)
+    res = build_results(prices, CFG, synthetic=True, rf_rate=rate)
+    seg = res["segments"]["out_of_sample"]
+    assert seg["sharpe_excess"] is not None and seg["sharpe_excess"] < seg["sharpe"]
+    none = build_results(prices, CFG, synthetic=True)
+    assert none["segments"]["out_of_sample"]["sharpe_excess"] is None
+
+
+def test_sharpe_excess_is_nan_for_a_flat_strategy():
+    idx = pd.bdate_range("2024-01-01", periods=10)
+    flat = pd.Series(0.0, index=idx)
+    rf = pd.Series(np.linspace(0.0001, 0.00011, 10), index=idx)
+    assert np.isnan(m.sharpe_excess(flat, rf))

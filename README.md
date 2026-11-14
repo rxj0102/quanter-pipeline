@@ -24,6 +24,7 @@ Output goes to `site_data/results.json` and `site_data/paper_log.csv`.
 - **Segments are fixed in `config.py`.** In-sample ends at `in_sample_end`. Paper trading starts at `paper_start`, which you set to the day you first deploy and never move earlier.
 - **Paper log is append-only.** `paper_log.csv` gets new rows daily and existing rows are never rewritten. Because the GitHub Action commits it every day, git history is the timestamp proof. If a recomputation ever disagrees with a logged row, the run prints a warning.
 - **Costs are in the first run.** `cost_bps` is charged on turnover in every segment.
+- **Sharpe in excess of cash is reported too.** Each segment has `sharpe` (raw returns) and `sharpe_excess` (net returns minus the 3-month T-bill, FRED series DGS3MO via the key-free fredgraph.csv endpoint, using the rate known at the prior close). If FRED cannot be reached the job still runs and `sharpe_excess` is null; `meta.rf_source` records which it was.
 - **Synthetic runs are flagged.** `meta.synthetic` is true in any file made from fake prices, so one can never be mistaken for real results.
 
 ## Drawdown stop
@@ -52,7 +53,7 @@ Status is `within_range`, `review`, `flat` (no positions during the whole window
 
 - `meta`: generated_at, last_data_date, synthetic flag, assumptions (the full config)
 - `summary`: rolling_sharpe (63 days), max_drawdown_all, max_drawdown_paper, var_95_1d and cvar_95_1d (positive numbers are losses), regime, paper_days, drawdown_stop (threshold, cooldown, active, current_drawdown, trigger_count, days_stopped), decay (status, current_sharpe, lower_bound, percentile, flags and the drawdown comparison)
-- `segments`: days, ann_return, ann_vol, sharpe, max_drawdown, start and end for in_sample, out_of_sample and paper
+- `segments`: days, ann_return, ann_vol, sharpe, sharpe_excess, max_drawdown, start and end for in_sample, out_of_sample and paper
 - `series`: parallel arrays of dates, segment, cum_return, drawdown, rolling_sharpe, stop_active (1 on days the stop forced the position to zero)
 
 ## Known limits
@@ -60,3 +61,31 @@ Status is `within_range`, `review`, `flat` (no positions during the whole window
 - Yahoo Finance data is free and convenient but can have gaps and revisions. Fine for a research site, not for production.
 - VaR and CVaR are historical over the trailing 504 days of strategy returns.
 - A paper-trading period of a few months says very little about a strategy. The site should say so.
+
+## Reproducibility
+
+### Data availability
+
+All inputs come from free, public sources. No paid data or API keys are required unless noted.
+
+- Yahoo Finance via the yfinance package (free, no key)
+
+### Computational requirements
+
+- Python 3.12.3. Every dependency version is pinned in `uv.lock`.
+- Checked on Linux x86_64 with 2 CPU cores and 8 GB RAM. No GPU is needed.
+
+```bash
+pip install uv     # once
+uv sync            # installs the exact pinned environment
+uv run pytest -q   # runs the test suite
+```
+
+### Runtime
+
+The test suite (15 tests) finishes in about 14 seconds on the machine above, including any data downloads it triggers.
+
+### Citation
+
+Citation metadata is in `CITATION.cff`. GitHub turns it into a Cite this repository button on the repo page.
+
