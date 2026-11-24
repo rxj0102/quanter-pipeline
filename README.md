@@ -83,7 +83,7 @@ uv run pytest -q   # runs the test suite
 
 ### Runtime
 
-The test suite (15 tests) finishes in about 14 seconds on the machine above, including any data downloads it triggers.
+The test suite (20 tests) finishes in about 14 seconds on the machine above, including any data downloads it triggers.
 
 ### Citation
 
